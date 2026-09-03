@@ -8,7 +8,7 @@ Nine moods, one morphing SVG. A studio preview of the uncoverLAB cat mascot: the
 
 1. **Neutral** — breathes, glances around, flicks an ear now and then
 2. **Curious** — head tilt, one ear perked (they swap on a double take), cheeks up in a smirk
-3. **Love** — pupils turn into red hearts that beat (lub-dub), body sways weightlessly
+3. **Love** — pupils turn into red hearts; three treatments to compare (beat, tilt, dreamy slow blinks)
 4. **Angry** — stomps in a loop (crouch, launch, slam, shudder), ears pinned back
 5. **Mad** — side-eye with the occasional full eye-roll, ears flat
 6. **Sad** — ears droop and sway, eyes cast down, sniffles
