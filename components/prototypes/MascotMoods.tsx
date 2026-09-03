@@ -12,22 +12,31 @@ const H = 231;
 
 export const MOODS: Mood[] = [
   "neutral",
+  "curious",
+  "love",
   "angry",
   "mad",
   "sad",
-  "sleep",
   "worried",
+  "ugh",
+  "sleep",
 ];
 
 // Label is the visible chip text; tint colours the halo behind the figure.
 const MOOD_META: Record<Mood, { label: string; tint: string }> = {
-  neutral: { label: "Neutral", tint: "#FFF1BF" },
-  angry: { label: "Angry", tint: "#FFD6D2" },
-  mad: { label: "Mad", tint: "#E9E4DF" },
-  sad: { label: "Sad", tint: "#D9E6FF" },
-  sleep: { label: "Sleepy", tint: "#E3DEFF" },
-  worried: { label: "Worried", tint: "#FFE4C8" },
+  neutral: { label: "Neutral", tint: "#FFEFB8" },
+  curious: { label: "Curious", tint: "#E4F1CF" },
+  love: { label: "Love", tint: "#FFD4E2" },
+  angry: { label: "Angry", tint: "#FFD3CD" },
+  mad: { label: "Mad", tint: "#E7E1D6" },
+  sad: { label: "Sad", tint: "#D6E3FA" },
+  worried: { label: "Worried", tint: "#FFE0C2" },
+  ugh: { label: "Ugh", tint: "#DCE9D8" },
+  sleep: { label: "Sleepy", tint: "#E2DDFA" },
 };
+
+// Page ground. The illustration was drawn for warm paper, not white.
+const GROUND = "#FFFBF0";
 
 // Every layer is sampled into a fixed number of points so any two states can
 // be interpolated. Layers whose silhouette shares fixed features across
@@ -74,16 +83,22 @@ const MOUTH_ANCHORING: Anchoring = {
   counts: [200, 60],
 };
 
+// Draw order is z-order. Cheeks sit above the eyes (they push up over them
+// in "curious"), the yellow lines sit above the brow.
 const LAYERS: LayerSpec[] = [
   { name: "head", fill: "#38201F", n: 300, collapse: "center", rig: "head", anchoring: HEAD_ANCHORING },
   { name: "eyeL", fill: "#FCC53C", n: 160, collapse: "center", eye: true, rig: "lid" },
   { name: "eyeR", fill: "#FCC53C", n: 160, collapse: "center", eye: true, rig: "lid" },
-  { name: "pupilL", fill: "#38201F", n: 110, collapse: "center", eye: true, rig: "pupil" },
-  { name: "pupilR", fill: "#38201F", n: 110, collapse: "center", eye: true, rig: "pupil" },
+  { name: "pupilL", fill: "#38201F", n: 120, collapse: "center", eye: true, rig: "pupil" },
+  { name: "pupilR", fill: "#38201F", n: 120, collapse: "center", eye: true, rig: "pupil" },
   { name: "sparkleL", fill: "#FFFFFF", n: 48, collapse: "center", eye: true, rig: "pupil" },
   { name: "sparkleR", fill: "#FFFFFF", n: 48, collapse: "center", eye: true, rig: "pupil" },
+  { name: "cheekL", fill: "#38201F", n: 120, collapse: "center" },
+  { name: "cheekR", fill: "#38201F", n: 120, collapse: "center" },
   { name: "chin", fill: "#FCC53C", n: 320, collapse: "center" },
   { name: "brow", fill: "#38201F", n: 90, collapse: "up" },
+  { name: "lineL", fill: "#FCC53C", n: 120, collapse: "center" },
+  { name: "lineR", fill: "#FCC53C", n: 90, collapse: "center" },
   { name: "mouth", fill: "#E42822", n: 200, collapse: "center", rig: "mouth", anchoring: MOUTH_ANCHORING },
 ];
 
@@ -274,6 +289,18 @@ function approach(v: number, target: number, k: number, dt: number) {
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+type RGB = [number, number, number];
+function hexToRgb(hex: string): RGB {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgbToCss(c: RGB) {
+  return `rgb(${Math.round(c[0])} ${Math.round(c[1])} ${Math.round(c[2])})`;
+}
+function layerFill(mood: Mood, spec: LayerSpec) {
+  return MOOD_STATES[mood].fills?.[spec.name] ?? spec.fill;
+}
+
 // ---------------------------------------------------------------------------
 // Engine: owns the per-layer point buffers, runs the morph and the idle rigs
 // (ears, pupils), and writes `d` straight to the DOM each frame so React
@@ -290,6 +317,11 @@ type LayerRun = {
   fromA: number;
   toA: number;
   curA: number;
+  // Fill colour can change between states (pupils become red hearts).
+  fromC: RGB;
+  toC: RGB;
+  curC: RGB;
+  colorMoves: boolean;
 };
 
 type Vec = { x: number; y: number };
@@ -319,6 +351,10 @@ class MascotEngine {
   private nextGlance = 1.5;
   private glanceUntil = 0;
   private roll = { t0: -10, next: 2.5 };
+  private pupilScale = 1;
+
+  // Curious: which ear is perked; swaps now and then (a double take).
+  private perk = { side: "L" as "L" | "R", next: 3 };
 
   // Sleep rig: the closed lids and the mouth line ride the breath, and one
   // lid twitches now and then.
@@ -370,6 +406,7 @@ class MascotEngine {
         ? Float32Array.from(pts)
         : collapsed(this.anyShape(spec.name), spec.collapse);
       const a = pts ? 1 : 0;
+      const c = hexToRgb(layerFill(initial, spec));
       this.layers.push({
         spec,
         el,
@@ -380,6 +417,10 @@ class MascotEngine {
         fromA: a,
         toA: a,
         curA: a,
+        fromC: c,
+        toC: c,
+        curC: c,
+        colorMoves: true,
       });
     }
     this.lastNow = performance.now();
@@ -412,6 +453,9 @@ class MascotEngine {
         run.to = collapsed(run.from, run.spec.collapse);
         run.toA = 0;
       }
+      run.fromC = run.curC;
+      run.toC = hexToRgb(layerFill(mood, run.spec));
+      run.colorMoves = run.fromC.some((v, i) => v !== run.toC[i]);
     }
     this.mood = mood;
     this.morphT0 = performance.now();
@@ -422,6 +466,7 @@ class MascotEngine {
     this.flick.next = t + rand(1.2, 2.4);
     this.roll.next = t + rand(1.4, 2.2);
     this.twitch.next = t + rand(2.5, 4);
+    this.perk.next = t + rand(2.2, 3.5);
     this.glanceUntil = 0;
   }
 
@@ -447,6 +492,12 @@ class MascotEngine {
           cur[i] = from[i] + (to[i] - from[i]) * p;
         }
         run.curA = Math.min(1, Math.max(0, run.fromA + (run.toA - run.fromA) * p));
+        if (run.colorMoves) {
+          const q = Math.min(1, Math.max(0, p));
+          run.curC = [0, 1, 2].map(
+            (i) => run.fromC[i] + (run.toC[i] - run.fromC[i]) * q,
+          ) as RGB;
+        }
       }
       if (done) this.morphT0 = -1;
       morphing = true;
@@ -473,6 +524,7 @@ class MascotEngine {
       else run.out.set(run.cur);
       run.el.setAttribute("d", toPathData(run.out));
       run.el.style.opacity = String(run.curA);
+      if (morphing && run.colorMoves) run.el.setAttribute("fill", rgbToCss(run.curC));
     }
   }
 
@@ -499,6 +551,19 @@ class MascotEngine {
             x: outward * 2 + 1.4 * Math.sin(t * 47),
             y: 3 + 1.1 * Math.sin(t * 41 + 0.7),
           };
+        case "curious": {
+          // One ear perked, the other relaxed; they swap on the double take.
+          const perked = (outward < 0 ? "L" : "R") === this.perk.side;
+          return perked
+            ? { x: -outward * 2, y: -7 + 0.6 * Math.sin(t * 5) }
+            : { x: outward * 5, y: 5 };
+        }
+        case "love":
+          // Both ears up and forward, with a slow happy wiggle.
+          return { x: -outward * 3 + 1.2 * Math.sin(t * 2.4), y: -5 + Math.sin(t * 2.4 + 1) };
+        case "ugh":
+          // Pinned back and flat, like backing away from a smell.
+          return { x: outward * 9, y: 9 + 0.4 * Math.sin(t * 19) };
         default:
           return { x: 0, y: 0 };
       }
@@ -513,6 +578,13 @@ class MascotEngine {
     this.ear.L.y = approach(this.ear.L.y, pose.L.y, k, dt);
     this.ear.R.x = approach(this.ear.R.x, pose.R.x, k, dt);
     this.ear.R.y = approach(this.ear.R.y, pose.R.y, k, dt);
+
+    if (this.mood === "curious" && t >= this.perk.next) {
+      this.perk.side = this.perk.side === "L" ? "R" : "L";
+      this.perk.next = t + rand(2.4, 4.5);
+      // The pupils follow the new ear with a small delay.
+      this.nextGlance = t + 0.12;
+    }
 
     // Flicks: a quick twitch of one ear, at irregular intervals, when calm.
     if ((this.mood === "neutral" || this.mood === "sleep") && t >= this.flick.next) {
@@ -615,16 +687,24 @@ class MascotEngine {
   private applyMouth(run: LayerRun) {
     const { cur, out } = run;
     out.set(cur);
-    if (this.mood !== "sleep" || this.morphT0 >= 0) return;
-    const b = this.breath(this.lastNow / 1000);
-    // Only the mouth line (segment 0) moves; the nose stays put. It widens a
-    // touch on the inhale and settles on the exhale.
+    if (this.morphT0 >= 0) return;
+    const t = this.lastNow / 1000;
+    // Only the mouth line (segment 0) moves; the nose stays put.
     const n = MOUTH_ANCHORING.counts[0];
-    const cxm = 190;
-    const sx = 1 + 0.025 * b;
-    for (let i = 0; i < n; i++) {
-      out[i * 2] = cxm + (cur[i * 2] - cxm) * sx;
-      out[i * 2 + 1] = cur[i * 2 + 1] + 0.8 * b;
+    if (this.mood === "sleep") {
+      // Widens a touch on the inhale and settles on the exhale.
+      const b = this.breath(t);
+      const cxm = 190;
+      const sx = 1 + 0.025 * b;
+      for (let i = 0; i < n; i++) {
+        out[i * 2] = cxm + (cur[i * 2] - cxm) * sx;
+        out[i * 2 + 1] = cur[i * 2 + 1] + 0.8 * b;
+      }
+    } else if (this.mood === "ugh") {
+      // A queasy wave travels along the wavy line.
+      for (let i = 0; i < n; i++) {
+        out[i * 2 + 1] = cur[i * 2 + 1] + 1.1 * Math.sin(cur[i * 2] * 0.09 - t * 5.5);
+      }
     }
   }
 
@@ -668,6 +748,28 @@ class MascotEngine {
         target = { x: 0.3 * Math.sin(t * 31), y: 0.6 };
         k = 20;
         break;
+      case "curious": {
+        // Eyes go up toward the perked ear, then a quick glance at you.
+        const toward = this.perk.side === "L" ? -5 : 5;
+        if (t >= this.nextGlance) {
+          this.pupilTarget = { x: toward, y: -4 };
+          this.glanceUntil = t + rand(1.6, 3);
+          this.nextGlance = this.glanceUntil + rand(0.5, 1.2);
+        }
+        target = t < this.glanceUntil ? this.pupilTarget : { x: 0, y: -1 };
+        k = 12;
+        break;
+      }
+      case "love":
+        // Hearts drift dreamily and beat: two thumps, then a rest.
+        target = { x: 2.5 * Math.sin(t * 1.3), y: -1 + 1.2 * Math.sin(t * 0.9) };
+        k = 6;
+        break;
+      case "ugh":
+        // Looks away and slowly slides further, refusing to look back.
+        target = { x: -6 + 1.5 * Math.sin(t * 0.7), y: 2.5 };
+        k = 5;
+        break;
       case "worried": {
         // Darting: new random spot every few hundred milliseconds.
         if (t >= this.nextGlance) {
@@ -683,14 +785,27 @@ class MascotEngine {
     }
     this.pupil.x = approach(this.pupil.x, target.x, k, dt);
     this.pupil.y = approach(this.pupil.y, target.y, k, dt);
+
+    // Heartbeat: lub-dub every 1.1s, only while in love.
+    let scale = 1;
+    if (this.mood === "love") {
+      const u = (t % 1.1) / 1.1;
+      const thump = (c: number, w: number) => Math.exp(-((u - c) * (u - c)) / (w * w));
+      scale = 1 + 0.16 * thump(0.08, 0.05) + 0.1 * thump(0.3, 0.06);
+    }
+    this.pupilScale = approach(this.pupilScale, scale, 30, dt);
   }
 
   private applyPupils(run: LayerRun) {
     const { cur, out } = run;
     const { x, y } = this.pupil;
+    const s = this.pupilScale;
+    let cx = 0;
+    let cy = 0;
+    if (s !== 1) [cx, cy] = centroid(cur);
     for (let i = 0; i < cur.length; i += 2) {
-      out[i] = cur[i] + x;
-      out[i + 1] = cur[i + 1] + y;
+      out[i] = cx + (cur[i] - cx) * s + x;
+      out[i + 1] = cy + (cur[i + 1] - cy) * s + y;
     }
   }
 }
@@ -701,11 +816,14 @@ class MascotEngine {
 
 const REACTION: Record<Mood, { name: string; ms: number }> = {
   neutral: { name: "mascot-pop", ms: 620 },
+  curious: { name: "mascot-perk", ms: 700 },
+  love: { name: "mascot-flutter", ms: 900 },
   angry: { name: "mascot-rage", ms: 900 },
   mad: { name: "mascot-huff", ms: 620 },
   sad: { name: "mascot-sink", ms: 620 },
-  sleep: { name: "mascot-sink", ms: 620 },
   worried: { name: "mascot-jolt", ms: 620 },
+  ugh: { name: "mascot-recoil", ms: 800 },
+  sleep: { name: "mascot-sink", ms: 620 },
 };
 
 function restartAnimation(el: SVGElement | null, name: string, ms: number) {
@@ -716,7 +834,13 @@ function restartAnimation(el: SVGElement | null, name: string, ms: number) {
   el.style.animation = `${name} ${ms}ms cubic-bezier(0.22, 1, 0.36, 1) both`;
 }
 
-export default function MascotMoods() {
+// `frame` picks the outer container: "page" owns the whole viewport,
+// "embedded" flexes inside a host page that brings its own chrome.
+export default function MascotMoods({
+  frame = "page",
+}: {
+  frame?: "page" | "embedded";
+}) {
   const [mood, setMood] = useState<Mood>("neutral");
   const [autoplay, setAutoplay] = useState(false);
   const moodRef = useRef<Mood>("neutral");
@@ -761,6 +885,20 @@ export default function MascotMoods() {
     }
   }, [mood]);
 
+  // Ugh: a shudder runs through the body every few seconds.
+  useEffect(() => {
+    if (mood !== "ugh" || reducedRef.current) return;
+    let timer = 0;
+    const schedule = () => {
+      timer = window.setTimeout(() => {
+        restartAnimation(reactionRef.current, "mascot-shudder", 450);
+        schedule();
+      }, 2200 + Math.random() * 2200);
+    };
+    schedule();
+    return () => window.clearTimeout(timer);
+  }, [mood]);
+
   // Blink at irregular intervals, never while asleep.
   useEffect(() => {
     let timer = 0;
@@ -803,7 +941,7 @@ export default function MascotMoods() {
       else if (e.key === " " || e.code === "Space") {
         e.preventDefault();
         setAutoplay((a) => !a);
-      } else if (/^[1-6]$/.test(e.key)) {
+      } else if (/^[1-9]$/.test(e.key) && Number(e.key) <= MOODS.length) {
         setMood(MOODS[Number(e.key) - 1]);
       }
     };
@@ -828,7 +966,12 @@ export default function MascotMoods() {
 
   return (
     <div
-      className="mascot-stage flex min-h-dvh flex-col px-6 py-6 sm:px-10 sm:py-8"
+      className={`mascot-stage flex flex-col ${
+        frame === "page"
+          ? "min-h-dvh px-6 py-6 sm:px-10 sm:py-8"
+          : "mx-auto w-full max-w-[1040px] flex-1 px-6 py-4 md:px-8"
+      }`}
+      style={frame === "page" ? { backgroundColor: GROUND } : undefined}
       data-mood={mood}
     >
       <style>{STYLES}</style>
@@ -839,7 +982,7 @@ export default function MascotMoods() {
             Mascot moods
           </h1>
           <p className="mt-0.5 text-sm text-neutral-500">
-            Six states, one morphing SVG. Pick a mood or click the character.
+            Nine states, one morphing SVG. Pick a mood or click the character.
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -847,7 +990,7 @@ export default function MascotMoods() {
             <kbd className="mascot-kbd">←</kbd>
             <kbd className="mascot-kbd">→</kbd>
             <span className="mr-2">switch</span>
-            <kbd className="mascot-kbd">1–6</kbd>
+            <kbd className="mascot-kbd">1–9</kbd>
             <span className="mr-2">jump</span>
             <kbd className="mascot-kbd">space</kbd>
             <span>autoplay</span>
@@ -856,7 +999,7 @@ export default function MascotMoods() {
             type="button"
             onClick={() => setAutoplay((a) => !a)}
             aria-pressed={autoplay}
-            className="mascot-chip flex h-9 items-center gap-2 rounded-full border border-neutral-200 bg-white px-3.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+            className="mascot-chip flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
           >
             <span
               aria-hidden
@@ -946,7 +1089,7 @@ export default function MascotMoods() {
         <div
           role="group"
           aria-label="Mood"
-          className="grid w-full max-w-[420px] grid-cols-3 gap-1 rounded-2xl bg-neutral-100 p-1 sm:flex sm:w-auto sm:max-w-none sm:rounded-full"
+          className="grid w-full max-w-[420px] grid-cols-3 gap-1 rounded-2xl bg-stone-200/60 p-1 sm:flex sm:w-auto sm:max-w-none sm:rounded-full"
         >
           {MOODS.map((m) => {
             const active = m === mood;
@@ -958,8 +1101,8 @@ export default function MascotMoods() {
                 onClick={() => setMood(m)}
                 className={`mascot-chip h-9 rounded-xl px-4 text-sm font-medium sm:rounded-full ${
                   active
-                    ? "bg-white text-neutral-900 shadow-sm"
-                    : "text-neutral-600 hover:text-neutral-900"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-600 hover:text-stone-900"
                 }`}
               >
                 {MOOD_META[m].label}
@@ -985,13 +1128,13 @@ const STYLES = `
   display: inline-block;
   min-width: 1.5rem;
   padding: 0 0.3rem;
-  border: 1px solid var(--color-neutral-200);
+  border: 1px solid var(--color-stone-300);
   border-radius: 0.375rem;
   text-align: center;
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-mono, ui-monospace), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   line-height: 1.25rem;
-  color: var(--color-neutral-600);
+  color: var(--color-stone-600);
 }
 
 .mascot-idle, .mascot-react, .mascot-eyes {
@@ -1018,6 +1161,9 @@ const STYLES = `
 [data-mood="sad"]     .mascot-idle { animation: mascot-sniffle 4.8s ease-in-out infinite; transform: translateY(6px) rotate(-2deg) scale(0.985); }
 [data-mood="sleep"]   .mascot-idle { animation: mascot-bob 3.1s ease-in-out infinite; }
 [data-mood="worried"] .mascot-idle { animation: mascot-tremble 0.14s linear infinite; }
+[data-mood="curious"] .mascot-idle { animation: mascot-tilt 3.6s ease-in-out infinite; transform: rotate(-6deg) translateY(-2px); }
+[data-mood="love"]    .mascot-idle { animation: mascot-swoon 2.6s ease-in-out infinite; }
+[data-mood="ugh"]     .mascot-idle { animation: mascot-queasy 2.2s ease-in-out infinite; transform: rotate(4deg) translateX(8px) scale(0.985); }
 
 
 .mascot-zzz { opacity: 0; transition: opacity 500ms ease; }
@@ -1064,6 +1210,21 @@ const STYLES = `
   62%  { transform: scale(1.02, 1); opacity: 1; }
   100% { transform: scale(1, 1); opacity: 1; }
 }
+/* Curious: holds the tilt and leans in a little, like listening. */
+@keyframes mascot-tilt {
+  0%, 100% { transform: rotate(-6deg) translateY(-2px) scale(1, 1); }
+  50%      { transform: rotate(-7deg) translateY(-4px) scale(1.015, 1.02); }
+}
+/* Love: floats and sways, weightless. */
+@keyframes mascot-swoon {
+  0%, 100% { transform: rotate(-3deg) translateY(0); }
+  50%      { transform: rotate(3deg) translateY(-6px); }
+}
+/* Ugh: leaning away, with a slow queasy roll. */
+@keyframes mascot-queasy {
+  0%, 100% { transform: rotate(4deg) translateX(8px) scale(0.985, 0.985); }
+  50%      { transform: rotate(5deg) translateX(9px) scale(0.975, 0.995); }
+}
 @keyframes mascot-tremble {
   0%   { transform: translate(0, 0); }
   25%  { transform: translate(-0.7px, 0.25px); }
@@ -1090,6 +1251,40 @@ const STYLES = `
   70%  { transform: translateX(5px) rotate(1deg); }
   80%  { transform: translateX(-3px) rotate(-0.5deg); }
   100% { transform: translate(0, 0) scale(1, 1) rotate(0); }
+}
+/* Entering curious: a quick perk with overshoot, like ears catching a sound. */
+@keyframes mascot-perk {
+  0%   { transform: scale(1, 1) rotate(0); }
+  25%  { transform: scale(0.96, 1.08) rotate(3deg) translateY(-8px); }
+  55%  { transform: scale(1.03, 0.97) rotate(-2deg) translateY(0); }
+  100% { transform: scale(1, 1) rotate(0); }
+}
+/* Entering love: a lift and a giddy wiggle. */
+@keyframes mascot-flutter {
+  0%   { transform: translateY(0) scale(1, 1) rotate(0); }
+  20%  { transform: translateY(-10px) scale(0.97, 1.05) rotate(-3deg); }
+  40%  { transform: translateY(-8px) scale(1, 1) rotate(3deg); }
+  60%  { transform: translateY(-4px) scale(1.02, 0.98) rotate(-2deg); }
+  80%  { transform: translateY(0) scale(1, 1) rotate(1deg); }
+  100% { transform: translateY(0) scale(1, 1) rotate(0); }
+}
+/* Entering ugh: a jerk backwards and a squash. */
+@keyframes mascot-recoil {
+  0%   { transform: translateX(0) scale(1, 1); }
+  20%  { transform: translateX(12px) scale(0.94, 1.06); }
+  45%  { transform: translateX(6px) scale(1.06, 0.95); }
+  70%  { transform: translateX(2px) scale(0.99, 1.01); }
+  100% { transform: translateX(0) scale(1, 1); }
+}
+/* Ugh, repeating: a shiver down the body. */
+@keyframes mascot-shudder {
+  0%   { transform: translateX(0) scale(1, 1); }
+  15%  { transform: translateX(-2.5px) scale(1.02, 0.98); }
+  30%  { transform: translateX(2.5px) scale(0.99, 1.01); }
+  45%  { transform: translateX(-2px); }
+  60%  { transform: translateX(1.5px); }
+  75%  { transform: translateX(-1px); }
+  100% { transform: translateX(0) scale(1, 1); }
 }
 @keyframes mascot-huff {
   0%   { transform: scale(1, 1); }

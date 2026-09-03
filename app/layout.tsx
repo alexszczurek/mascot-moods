@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Mascot moods",
-  description: "Six moods, one morphing SVG mascot. An uncoverLAB studio preview.",
+  description: "Nine moods, one morphing SVG mascot. An uncoverLAB studio preview.",
 };
 
 export default function RootLayout({
