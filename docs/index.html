@@ -1016,24 +1016,8 @@ function MascotMoods({ frame = "page", }) {
             ? "min-h-dvh px-6 py-6 sm:px-10 sm:py-8"
             : "mx-auto w-full max-w-[1040px] flex-1 px-6 py-4 md:px-8"}`, style: frame === "page" ? { backgroundColor: GROUND } : undefined, "data-mood": mood },
         React.createElement("style", null, STYLES),
-        React.createElement("header", { className: "flex flex-wrap items-start justify-between gap-x-8 gap-y-4" },
-            React.createElement("div", null,
-                React.createElement("h1", { className: "text-base font-semibold tracking-tight text-stone-900" }, "Mascot moods"),
-                React.createElement("p", { className: "mt-0.5 text-sm text-stone-600" }, "Nine states, one morphing SVG. Pick a mood or click the character.")),
-            React.createElement("div", { className: "flex items-center gap-4" },
-                React.createElement("p", { className: "hidden items-center gap-1.5 text-xs text-stone-600 md:flex" },
-                    React.createElement("kbd", { className: "mascot-kbd" }, "\u2190"),
-                    React.createElement("kbd", { className: "mascot-kbd" }, "\u2192"),
-                    React.createElement("span", { className: "mr-2" }, "switch"),
-                    React.createElement("kbd", { className: "mascot-kbd" }, "1\u20139"),
-                    React.createElement("span", { className: "mr-2" }, "jump"),
-                    React.createElement("kbd", { className: "mascot-kbd" }, "space"),
-                    React.createElement("span", null, "autoplay")),
-                React.createElement("button", { type: "button", onClick: () => setAutoplay((a) => !a), "aria-pressed": autoplay, className: "mascot-chip flex h-9 items-center gap-2 rounded-full border border-stone-300 bg-white px-3.5 text-sm font-medium text-stone-700 hover:bg-stone-50" },
-                    React.createElement("span", { "aria-hidden": true, className: `size-1.5 rounded-full ${autoplay ? "bg-emerald-500" : "bg-stone-300"}` }),
-                    autoplay ? "Autoplay on" : "Autoplay"))),
-        React.createElement("main", { className: "flex flex-1 flex-col items-center justify-center gap-8 py-8" },
-            React.createElement("div", { className: "relative w-full max-w-[520px]" },
+        React.createElement("main", { className: "relative flex flex-1 flex-col items-center justify-center gap-8 py-8" },
+            React.createElement("div", { className: "relative w-full max-w-[480px]" },
                 React.createElement("div", { "aria-hidden": true, className: "mascot-halo pointer-events-none absolute left-1/2 top-1/2 size-[420px] -translate-x-1/2 -translate-y-[46%] rounded-full blur-3xl", style: { backgroundColor: meta.tint } }),
                 React.createElement("button", { type: "button", onClick: () => step(1), "aria-label": `Mood: ${meta.label}. Next mood`, className: "mascot-figure relative block w-full cursor-pointer rounded-3xl" },
                     React.createElement("svg", { viewBox: `0 ${-40} ${W} ${H + 40}`, className: "block h-auto w-full overflow-visible", "aria-hidden": true },
@@ -1055,7 +1039,24 @@ function MascotMoods({ frame = "page", }) {
                 return (React.createElement("button", { key: m, type: "button", "aria-pressed": active, onClick: () => setMood(m), className: `mascot-chip h-9 rounded-xl px-4 text-sm font-medium sm:rounded-full ${active
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-600 hover:text-stone-900"}` }, MOOD_META[m].label));
-            })))));
+            })),
+            React.createElement("aside", { "aria-labelledby": "mascot-title", className: "w-full max-w-[420px] rounded-2xl border border-stone-200 bg-white p-4 lg:absolute lg:right-0 lg:top-1/2 lg:w-[208px] lg:max-w-none lg:-translate-y-1/2" },
+                React.createElement("h1", { id: "mascot-title", className: "text-sm font-semibold text-stone-900" }, "Mascot moods"),
+                React.createElement("p", { className: "mt-1 text-xs leading-relaxed text-stone-600", style: { textWrap: "pretty" } }, "Nine states, one morphing SVG. Pick a mood or click the character."),
+                React.createElement("dl", { className: "mt-3 hidden grid-cols-[auto_1fr] items-center gap-x-2.5 gap-y-1.5 text-xs text-stone-600 md:grid" },
+                    React.createElement("dt", { className: "flex gap-1" },
+                        React.createElement("kbd", { className: "mascot-kbd" }, "\u2190"),
+                        React.createElement("kbd", { className: "mascot-kbd" }, "\u2192")),
+                    React.createElement("dd", null, "Switch mood"),
+                    React.createElement("dt", null,
+                        React.createElement("kbd", { className: "mascot-kbd" }, "1\u20139")),
+                    React.createElement("dd", null, "Jump to a mood"),
+                    React.createElement("dt", null,
+                        React.createElement("kbd", { className: "mascot-kbd" }, "space")),
+                    React.createElement("dd", null, "Autoplay")),
+                React.createElement("button", { type: "button", onClick: () => setAutoplay((a) => !a), "aria-pressed": autoplay, className: "mascot-chip mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full border border-stone-300 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50" },
+                    React.createElement("span", { "aria-hidden": true, className: `size-1.5 rounded-full ${autoplay ? "bg-emerald-500" : "bg-stone-300"}` }),
+                    autoplay ? "Autoplay on" : "Autoplay")))));
 }
 // Scoped styles. Everything animates transform/opacity only. Groups use
 // fill-box so their origin follows the drawing; the props use view-box

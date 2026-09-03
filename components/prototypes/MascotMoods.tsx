@@ -1012,44 +1012,8 @@ export default function MascotMoods({
     >
       <style>{STYLES}</style>
 
-      <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight text-stone-900">
-            Mascot moods
-          </h1>
-          <p className="mt-0.5 text-sm text-stone-600">
-            Nine states, one morphing SVG. Pick a mood or click the character.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <p className="hidden items-center gap-1.5 text-xs text-stone-600 md:flex">
-            <kbd className="mascot-kbd">←</kbd>
-            <kbd className="mascot-kbd">→</kbd>
-            <span className="mr-2">switch</span>
-            <kbd className="mascot-kbd">1–9</kbd>
-            <span className="mr-2">jump</span>
-            <kbd className="mascot-kbd">space</kbd>
-            <span>autoplay</span>
-          </p>
-          <button
-            type="button"
-            onClick={() => setAutoplay((a) => !a)}
-            aria-pressed={autoplay}
-            className="mascot-chip flex h-9 items-center gap-2 rounded-full border border-stone-300 bg-white px-3.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
-          >
-            <span
-              aria-hidden
-              className={`size-1.5 rounded-full ${
-                autoplay ? "bg-emerald-500" : "bg-stone-300"
-              }`}
-            />
-            {autoplay ? "Autoplay on" : "Autoplay"}
-          </button>
-        </div>
-      </header>
-
-      <main className="flex flex-1 flex-col items-center justify-center gap-8 py-8">
-        <div className="relative w-full max-w-[520px]">
+      <main className="relative flex flex-1 flex-col items-center justify-center gap-8 py-8">
+        <div className="relative w-full max-w-[480px]">
           {/* Mood-coloured halo; only its colour changes, so it stays cheap. */}
           <div
             aria-hidden
@@ -1146,6 +1110,53 @@ export default function MascotMoods({
             );
           })}
         </div>
+
+        {/* One card carries the title, the how-to and the only secondary
+            control, so the host page keeps a single header. On wide screens
+            it sits beside the character; below that it follows the chips. */}
+        <aside
+          aria-labelledby="mascot-title"
+          className="w-full max-w-[420px] rounded-2xl border border-stone-200 bg-white p-4 lg:absolute lg:right-0 lg:top-1/2 lg:w-[208px] lg:max-w-none lg:-translate-y-1/2"
+        >
+          <h1 id="mascot-title" className="text-sm font-semibold text-stone-900">
+            Mascot moods
+          </h1>
+          <p
+            className="mt-1 text-xs leading-relaxed text-stone-600"
+            style={{ textWrap: "pretty" }}
+          >
+            Nine states, one morphing SVG. Pick a mood or click the character.
+          </p>
+          <dl className="mt-3 hidden grid-cols-[auto_1fr] items-center gap-x-2.5 gap-y-1.5 text-xs text-stone-600 md:grid">
+            <dt className="flex gap-1">
+              <kbd className="mascot-kbd">←</kbd>
+              <kbd className="mascot-kbd">→</kbd>
+            </dt>
+            <dd>Switch mood</dd>
+            <dt>
+              <kbd className="mascot-kbd">1–9</kbd>
+            </dt>
+            <dd>Jump to a mood</dd>
+            <dt>
+              <kbd className="mascot-kbd">space</kbd>
+            </dt>
+            <dd>Autoplay</dd>
+          </dl>
+          <button
+            type="button"
+            onClick={() => setAutoplay((a) => !a)}
+            aria-pressed={autoplay}
+            className="mascot-chip mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full border border-stone-300 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50"
+          >
+            <span
+              aria-hidden
+              className={`size-1.5 rounded-full ${
+                autoplay ? "bg-emerald-500" : "bg-stone-300"
+              }`}
+            />
+            {autoplay ? "Autoplay on" : "Autoplay"}
+          </button>
+        </aside>
       </main>
     </div>
   );
