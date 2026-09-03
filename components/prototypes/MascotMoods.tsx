@@ -1111,23 +1111,24 @@ export default function MascotMoods({
           })}
         </div>
 
-        {/* One card carries the title, the how-to and the only secondary
-            control, so the host page keeps a single header. On wide screens
-            it sits beside the character; below that it follows the chips. */}
+        {/* One small card carries the title, the how-to and the only
+            secondary control, so the host page keeps a single header. On
+            wide screens it sits in the bottom-right corner, well clear of
+            the character; below that it follows the chips. */}
         <aside
           aria-labelledby="mascot-title"
-          className="w-full max-w-[420px] rounded-2xl border border-stone-200 bg-white p-4 lg:absolute lg:right-0 lg:top-1/2 lg:w-[208px] lg:max-w-none lg:-translate-y-1/2"
+          className="w-full max-w-[420px] rounded-xl border border-stone-200 bg-white p-3 lg:absolute lg:bottom-0 lg:right-0 lg:w-[176px] lg:max-w-none"
         >
-          <h1 id="mascot-title" className="text-sm font-semibold text-stone-900">
+          <h1 id="mascot-title" className="text-xs font-semibold text-stone-900">
             Mascot moods
           </h1>
           <p
-            className="mt-1 text-xs leading-relaxed text-stone-600"
+            className="mt-0.5 text-[11px] leading-relaxed text-stone-600"
             style={{ textWrap: "pretty" }}
           >
             Nine states, one morphing SVG. Pick a mood or click the character.
           </p>
-          <dl className="mt-3 hidden grid-cols-[auto_1fr] items-center gap-x-2.5 gap-y-1.5 text-xs text-stone-600 md:grid">
+          <dl className="mt-2.5 hidden grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-[11px] text-stone-600 md:grid">
             <dt className="flex gap-1">
               <kbd className="mascot-kbd">←</kbd>
               <kbd className="mascot-kbd">→</kbd>
@@ -1146,7 +1147,7 @@ export default function MascotMoods({
             type="button"
             onClick={() => setAutoplay((a) => !a)}
             aria-pressed={autoplay}
-            className="mascot-chip mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full border border-stone-300 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50"
+            className="mascot-chip mt-2.5 flex h-8 w-full items-center justify-center gap-2 rounded-full border border-stone-300 bg-white text-xs font-medium text-stone-700 hover:bg-stone-50"
           >
             <span
               aria-hidden
@@ -1173,14 +1174,14 @@ const STYLES = `
 
 .mascot-kbd {
   display: inline-block;
-  min-width: 1.5rem;
-  padding: 0 0.3rem;
+  min-width: 1.375rem;
+  padding: 0 0.25rem;
   border: 1px solid var(--color-stone-300);
-  border-radius: 0.375rem;
+  border-radius: 0.3rem;
   text-align: center;
   font-family: var(--font-mono, ui-monospace), ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  line-height: 1.25rem;
+  font-size: 10px;
+  line-height: 1.125rem;
   color: var(--color-stone-600);
 }
 
