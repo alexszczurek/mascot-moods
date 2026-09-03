@@ -1122,12 +1122,6 @@ export default function MascotMoods({
           <h1 id="mascot-title" className="text-xs font-semibold text-stone-900">
             Mascot moods
           </h1>
-          <p
-            className="mt-0.5 text-[11px] leading-relaxed text-stone-600"
-            style={{ textWrap: "pretty" }}
-          >
-            Nine states, one morphing SVG. Pick a mood or click the character.
-          </p>
           <dl className="mt-2.5 hidden grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-[11px] text-stone-600 md:grid">
             <dt className="flex gap-1">
               <kbd className="mascot-kbd">←</kbd>
