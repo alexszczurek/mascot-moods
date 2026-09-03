@@ -26,7 +26,7 @@ export const MOODS: Mood[] = [
 const MOOD_META: Record<Mood, { label: string; tint: string }> = {
   neutral: { label: "Neutral", tint: "#FFEFB8" },
   curious: { label: "Curious", tint: "#E4F1CF" },
-  love: { label: "Love", tint: "#FFD4E2" },
+  love: { label: "Love", tint: "#FFBFD3" },
   angry: { label: "Angry", tint: "#FFD3CD" },
   mad: { label: "Mad", tint: "#E7E1D6" },
   sad: { label: "Sad", tint: "#D6E3FA" },
@@ -288,14 +288,6 @@ function approach(v: number, target: number, k: number, dt: number) {
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-// Love has three treatments to compare; the UI exposes them only in that mood.
-export type LoveVariant = "beat" | "tilt" | "dreamy";
-export const LOVE_VARIANTS: { id: LoveVariant; label: string }[] = [
-  { id: "beat", label: "Beat" },
-  { id: "tilt", label: "Tilt" },
-  { id: "dreamy", label: "Dreamy" },
-];
-
 type RGB = [number, number, number];
 function hexToRgb(hex: string): RGB {
   const n = parseInt(hex.slice(1), 16);
@@ -359,8 +351,7 @@ class MascotEngine {
   private glanceUntil = 0;
   private roll = { t0: -10, next: 2.5 };
   private pupilScale = 1;
-  private pupilAngle = 0;
-  loveVariant: LoveVariant = "beat";
+  private moodT0 = 0;
 
   // Curious: which ear is perked; swaps now and then (a double take).
   private perk = { side: "L" as "L" | "R", next: 3 };
@@ -468,6 +459,7 @@ class MascotEngine {
     }
     this.mood = mood;
     this.morphT0 = performance.now();
+    this.moodT0 = this.morphT0 / 1000;
     // Fresh mood, fresh schedule: the first glance/flick lands soon after the
     // morph settles so the new state reads as alive right away.
     const t = this.morphT0 / 1000;
@@ -567,9 +559,14 @@ class MascotEngine {
             ? { x: -outward * 2, y: -7 + 0.6 * Math.sin(t * 5) }
             : { x: outward * 5, y: 5 };
         }
-        case "love":
-          // Both ears up and forward, held still.
-          return { x: -outward * 3, y: -5 };
+        case "love": {
+          // Up and forward, quivering with excitement, hopping on each beat.
+          const b = this.beat(t);
+          return {
+            x: -outward * 3 + 0.9 * Math.sin(t * 38),
+            y: -5 - 4 * b + 0.5 * Math.sin(t * 31),
+          };
+        }
         case "ugh":
           // Pinned back and flat, like backing away from a smell.
           return { x: outward * 9, y: 9 + 0.4 * Math.sin(t * 19) };
@@ -582,7 +579,8 @@ class MascotEngine {
 
   private updateEars(t: number, dt: number) {
     const pose = this.earPose(t);
-    const k = this.mood === "sad" ? 4 : this.mood === "angry" ? 18 : 9;
+    const k =
+      this.mood === "sad" ? 4 : this.mood === "angry" || this.mood === "love" ? 18 : 9;
     this.ear.L.x = approach(this.ear.L.x, pose.L.x, k, dt);
     this.ear.L.y = approach(this.ear.L.y, pose.L.y, k, dt);
     this.ear.R.x = approach(this.ear.R.x, pose.R.x, k, dt);
@@ -654,6 +652,15 @@ class MascotEngine {
     return Math.sin(t * 2.03);
   }
 
+  // Love runs on one clock: a lub-dub every 1.2s, phase-locked to the moment
+  // the mood was entered so the CSS body pulse and the JS rigs land together.
+  static readonly BEAT = 1.2;
+  private beat(t: number) {
+    const u = ((t - this.moodT0) % MascotEngine.BEAT) / MascotEngine.BEAT;
+    const thump = (c: number, w: number) => Math.exp(-((u - c) * (u - c)) / (w * w));
+    return thump(0.06, 0.05) + 0.6 * thump(0.28, 0.06);
+  }
+
   private updateSleep(t: number) {
     if (this.mood !== "sleep") return;
     if (t >= this.twitch.next) {
@@ -708,6 +715,14 @@ class MascotEngine {
       for (let i = 0; i < n; i++) {
         out[i * 2] = cxm + (cur[i * 2] - cxm) * sx;
         out[i * 2 + 1] = cur[i * 2 + 1] + 0.8 * b;
+      }
+    } else if (this.mood === "love") {
+      const b = this.beat(t);
+      const cxm = 184;
+      const sx = 1 + 0.1 * b;
+      for (let i = 0; i < n; i++) {
+        out[i * 2] = cxm + (cur[i * 2] - cxm) * sx;
+        out[i * 2 + 1] = cur[i * 2 + 1] + 0.6 * b;
       }
     } else if (this.mood === "ugh") {
       // A queasy wave travels along the wavy line.
@@ -770,11 +785,7 @@ class MascotEngine {
         break;
       }
       case "love":
-        // Hearts sit almost still; the variant decides how they move.
-        target =
-          this.loveVariant === "dreamy"
-            ? { x: 1.5 * Math.sin(t * 0.5), y: -0.5 }
-            : { x: 0, y: -1 };
+        target = { x: 0, y: -1 };
         k = 4;
         break;
       case "ugh":
@@ -798,43 +809,35 @@ class MascotEngine {
     this.pupil.x = approach(this.pupil.x, target.x, k, dt);
     this.pupil.y = approach(this.pupil.y, target.y, k, dt);
 
-    // Love variants. Beat: a soft lub-dub every 1.2s. Tilt: the hearts rock
-    // in place. Dreamy: still hearts, the slow blinks do the talking.
+    // Hearts pump hard on the beat. On entry they pop past size and settle,
+    // the way a like button overshoots.
     let scale = 1;
-    let angle = 0;
     if (this.mood === "love") {
-      if (this.loveVariant === "beat") {
-        const u = (t % 1.2) / 1.2;
-        const thump = (c: number, w: number) => Math.exp(-((u - c) * (u - c)) / (w * w));
-        scale = 1 + 0.09 * thump(0.08, 0.05) + 0.05 * thump(0.3, 0.06);
-      } else if (this.loveVariant === "tilt") {
-        angle = 0.14 * Math.sin(t * 2.2);
-      }
+      scale = 1 + 0.22 * this.beat(t);
+      const e = (t - this.moodT0) / 0.7;
+      if (e > 0.25 && e < 1) scale += 0.35 * Math.sin(Math.PI * ((e - 0.25) / 0.75));
     }
-    this.pupilScale = approach(this.pupilScale, scale, 30, dt);
-    this.pupilAngle = approach(this.pupilAngle, angle, 30, dt);
+    this.pupilScale = approach(this.pupilScale, scale, 40, dt);
   }
 
   private applyPupils(run: LayerRun) {
     const { cur, out } = run;
     const { x, y } = this.pupil;
     const s = this.pupilScale;
-    const a = this.pupilAngle;
-    if (s === 1 && a === 0) {
+    if (s === 1) {
       for (let i = 0; i < cur.length; i += 2) {
         out[i] = cur[i] + x;
         out[i + 1] = cur[i + 1] + y;
       }
       return;
     }
+    // A pump, not a zoom: the heart widens a touch more than it grows tall.
     const [cx, cy] = centroid(cur);
-    const cos = Math.cos(a);
-    const sin = Math.sin(a);
+    const sx = 1 + (s - 1) * 1.15;
+    const sy = 1 + (s - 1) * 0.85;
     for (let i = 0; i < cur.length; i += 2) {
-      const dx = (cur[i] - cx) * s;
-      const dy = (cur[i + 1] - cy) * s;
-      out[i] = cx + dx * cos - dy * sin + x;
-      out[i + 1] = cy + dx * sin + dy * cos + y;
+      out[i] = cx + (cur[i] - cx) * sx + x;
+      out[i + 1] = cy + (cur[i + 1] - cy) * sy + y;
     }
   }
 }
@@ -846,7 +849,7 @@ class MascotEngine {
 const REACTION: Record<Mood, { name: string; ms: number }> = {
   neutral: { name: "mascot-pop", ms: 620 },
   curious: { name: "mascot-perk", ms: 700 },
-  love: { name: "mascot-flutter", ms: 900 },
+  love: { name: "mascot-flutter", ms: 800 },
   angry: { name: "mascot-rage", ms: 900 },
   mad: { name: "mascot-huff", ms: 620 },
   sad: { name: "mascot-sink", ms: 620 },
@@ -873,12 +876,6 @@ export default function MascotMoods({
   const engineRef = useRef<MascotEngine | null>(null);
   const [mood, setMood] = useState<Mood>("neutral");
   const [autoplay, setAutoplay] = useState(false);
-  const [loveVariant, setLoveVariant] = useState<LoveVariant>("beat");
-  const loveVariantRef = useRef<LoveVariant>("beat");
-  useEffect(() => {
-    loveVariantRef.current = loveVariant;
-    if (engineRef.current) engineRef.current.loveVariant = loveVariant;
-  }, [loveVariant]);
   const moodRef = useRef<Mood>("neutral");
   useEffect(() => {
     moodRef.current = mood;
@@ -899,7 +896,6 @@ export default function MascotMoods({
       moodRef.current,
       reducedRef.current,
     );
-    engine.loveVariant = loveVariantRef.current;
     engineRef.current = engine;
     return () => {
       engine.destroy();
@@ -941,12 +937,7 @@ export default function MascotMoods({
     const schedule = () => {
       timer = window.setTimeout(
         () => {
-          const dreamy =
-            moodRef.current === "love" && loveVariantRef.current === "dreamy";
-          if (dreamy && !reducedRef.current) {
-            // Slow, heavy-lidded blinks.
-            restartAnimation(eyesRef.current, "mascot-blink-slow", 900);
-          } else if (moodRef.current !== "sleep" && !reducedRef.current) {
+          if (moodRef.current !== "sleep" && !reducedRef.current) {
             restartAnimation(eyesRef.current, "mascot-blink", 170);
             // Occasional double blink reads as more alive than a metronome.
             if (Math.random() < 0.25) {
@@ -1151,34 +1142,6 @@ export default function MascotMoods({
             );
           })}
         </div>
-
-        {/* Love only: compare treatments for the hearts. */}
-        <div
-          role="group"
-          aria-label="Love treatment"
-          className={`flex items-center gap-1 text-xs transition-opacity duration-300 ${
-            mood === "love" ? "opacity-100" : "pointer-events-none opacity-0"
-          }`}
-          aria-hidden={mood !== "love"}
-        >
-          <span className="mr-1 text-stone-500">Hearts</span>
-          {LOVE_VARIANTS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              aria-pressed={loveVariant === v.id}
-              tabIndex={mood === "love" ? 0 : -1}
-              onClick={() => setLoveVariant(v.id)}
-              className={`mascot-chip h-7 rounded-full px-3 font-medium ${
-                loveVariant === v.id
-                  ? "bg-stone-900 text-white"
-                  : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
       </main>
     </div>
   );
@@ -1188,7 +1151,7 @@ export default function MascotMoods({
 // fill-box so their origin follows the drawing; the props use view-box
 // origins in canvas units so they pivot around their own anchor.
 const STYLES = `
-.mascot-halo { transition: background-color 700ms ease; opacity: .75; }
+.mascot-halo { transition: background-color 700ms ease; opacity: .75; transform-origin: 50% 50%; }
 
 .mascot-chip { transition: scale 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 150ms ease, color 150ms ease, box-shadow 150ms ease; }
 .mascot-chip:active { scale: 0.96; }
@@ -1231,7 +1194,8 @@ const STYLES = `
 [data-mood="sleep"]   .mascot-idle { animation: mascot-bob 3.1s ease-in-out infinite; }
 [data-mood="worried"] .mascot-idle { animation: mascot-tremble 0.14s linear infinite; }
 [data-mood="curious"] .mascot-idle { animation: mascot-breathe 3.8s ease-in-out infinite; transform: rotate(-4deg); }
-[data-mood="love"]    .mascot-idle { animation: mascot-breathe 3.2s ease-in-out infinite; }
+[data-mood="love"]    .mascot-idle { animation: mascot-heartbeat 1.2s linear infinite; }
+[data-mood="love"]    .mascot-halo { animation: mascot-halo-beat 1.2s linear infinite; }
 [data-mood="ugh"]     .mascot-idle { animation: mascot-breathe 3.6s ease-in-out infinite; transform: rotate(2deg) translateX(6px); }
 
 
@@ -1279,6 +1243,23 @@ const STYLES = `
   62%  { transform: scale(1.02, 1); opacity: 1; }
   100% { transform: scale(1, 1); opacity: 1; }
 }
+/* Love: the whole body pumps with the heart. Same 1.2s clock as the rigs. */
+@keyframes mascot-heartbeat {
+  0%   { transform: scale(1, 1) translateY(0); }
+  6%   { transform: scale(1.045, 0.965) translateY(1px); }
+  14%  { transform: scale(0.99, 1.01) translateY(-1px); }
+  22%  { transform: scale(1, 1) translateY(0); }
+  28%  { transform: scale(1.025, 0.98) translateY(0.5px); }
+  36%  { transform: scale(0.995, 1.005) translateY(0); }
+  44%, 100% { transform: scale(1, 1) translateY(0); }
+}
+@keyframes mascot-halo-beat {
+  0%   { transform: scale(1); opacity: 0.75; }
+  6%   { transform: scale(1.12); opacity: 1; }
+  16%  { transform: scale(1.02); opacity: 0.8; }
+  28%  { transform: scale(1.08); opacity: 0.95; }
+  44%, 100% { transform: scale(1); opacity: 0.75; }
+}
 @keyframes mascot-tremble {
   0%   { transform: translate(0, 0); }
   25%  { transform: translate(-0.7px, 0.25px); }
@@ -1316,8 +1297,10 @@ const STYLES = `
 /* Entering love: a lift and a giddy wiggle. */
 @keyframes mascot-flutter {
   0%   { transform: translateY(0) scale(1, 1); }
-  30%  { transform: translateY(-8px) scale(0.98, 1.04); }
-  60%  { transform: translateY(0) scale(1.03, 0.97); }
+  18%  { transform: translateY(4px) scale(1.06, 0.92); }
+  42%  { transform: translateY(-16px) scale(0.95, 1.07); }
+  68%  { transform: translateY(0) scale(1.05, 0.95); }
+  84%  { transform: translateY(-2px) scale(0.99, 1.01); }
   100% { transform: translateY(0) scale(1, 1); }
 }
 /* Entering ugh: a jerk backwards and a squash. */
@@ -1359,11 +1342,6 @@ const STYLES = `
   0%, 100% { transform: scaleY(1); }
   50%      { transform: scaleY(0.08); }
 }
-@keyframes mascot-blink-slow {
-  0%, 100% { transform: scaleY(1); }
-  35%      { transform: scaleY(0.12); }
-  55%      { transform: scaleY(0.12); }
-}
 @keyframes mascot-zzz {
   0%   { opacity: 0; transform: translate(0, 6px) scale(0.8); }
   25%  { opacity: 1; }
@@ -1373,7 +1351,7 @@ const STYLES = `
 
 
 @media (prefers-reduced-motion: reduce) {
-  .mascot-idle, .mascot-eyes, .mascot-zzz text, .mascot-shadow { animation: none !important; }
+  .mascot-idle, .mascot-eyes, .mascot-zzz text, .mascot-shadow, .mascot-halo { animation: none !important; }
   .mascot-idle { transition: none; transform: none !important; }
   .mascot-halo { transition: background-color 300ms ease; }
 }
