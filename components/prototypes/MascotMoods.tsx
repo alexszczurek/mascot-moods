@@ -35,8 +35,7 @@ const MOOD_META: Record<Mood, { label: string; tint: string }> = {
   sleep: { label: "Sleepy", tint: "#E2DDFA" },
 };
 
-// Page ground. The illustration was drawn for warm paper, not white.
-const GROUND = "#FFFBF0";
+const GROUND = "#FFFFFF";
 
 // Every layer is sampled into a fixed number of points so any two states can
 // be interpolated. Layers whose silhouette shares fixed features across
@@ -289,6 +288,14 @@ function approach(v: number, target: number, k: number, dt: number) {
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+// Love has three treatments to compare; the UI exposes them only in that mood.
+export type LoveVariant = "beat" | "tilt" | "dreamy";
+export const LOVE_VARIANTS: { id: LoveVariant; label: string }[] = [
+  { id: "beat", label: "Beat" },
+  { id: "tilt", label: "Tilt" },
+  { id: "dreamy", label: "Dreamy" },
+];
+
 type RGB = [number, number, number];
 function hexToRgb(hex: string): RGB {
   const n = parseInt(hex.slice(1), 16);
@@ -352,6 +359,8 @@ class MascotEngine {
   private glanceUntil = 0;
   private roll = { t0: -10, next: 2.5 };
   private pupilScale = 1;
+  private pupilAngle = 0;
+  loveVariant: LoveVariant = "beat";
 
   // Curious: which ear is perked; swaps now and then (a double take).
   private perk = { side: "L" as "L" | "R", next: 3 };
@@ -559,8 +568,8 @@ class MascotEngine {
             : { x: outward * 5, y: 5 };
         }
         case "love":
-          // Both ears up and forward, with a slow happy wiggle.
-          return { x: -outward * 3 + 1.2 * Math.sin(t * 2.4), y: -5 + Math.sin(t * 2.4 + 1) };
+          // Both ears up and forward, held still.
+          return { x: -outward * 3, y: -5 };
         case "ugh":
           // Pinned back and flat, like backing away from a smell.
           return { x: outward * 9, y: 9 + 0.4 * Math.sin(t * 19) };
@@ -761,9 +770,12 @@ class MascotEngine {
         break;
       }
       case "love":
-        // Hearts drift dreamily and beat: two thumps, then a rest.
-        target = { x: 2.5 * Math.sin(t * 1.3), y: -1 + 1.2 * Math.sin(t * 0.9) };
-        k = 6;
+        // Hearts sit almost still; the variant decides how they move.
+        target =
+          this.loveVariant === "dreamy"
+            ? { x: 1.5 * Math.sin(t * 0.5), y: -0.5 }
+            : { x: 0, y: -1 };
+        k = 4;
         break;
       case "ugh":
         // Looks away and slowly slides further, refusing to look back.
@@ -786,26 +798,43 @@ class MascotEngine {
     this.pupil.x = approach(this.pupil.x, target.x, k, dt);
     this.pupil.y = approach(this.pupil.y, target.y, k, dt);
 
-    // Heartbeat: lub-dub every 1.1s, only while in love.
+    // Love variants. Beat: a soft lub-dub every 1.2s. Tilt: the hearts rock
+    // in place. Dreamy: still hearts, the slow blinks do the talking.
     let scale = 1;
+    let angle = 0;
     if (this.mood === "love") {
-      const u = (t % 1.1) / 1.1;
-      const thump = (c: number, w: number) => Math.exp(-((u - c) * (u - c)) / (w * w));
-      scale = 1 + 0.16 * thump(0.08, 0.05) + 0.1 * thump(0.3, 0.06);
+      if (this.loveVariant === "beat") {
+        const u = (t % 1.2) / 1.2;
+        const thump = (c: number, w: number) => Math.exp(-((u - c) * (u - c)) / (w * w));
+        scale = 1 + 0.09 * thump(0.08, 0.05) + 0.05 * thump(0.3, 0.06);
+      } else if (this.loveVariant === "tilt") {
+        angle = 0.14 * Math.sin(t * 2.2);
+      }
     }
     this.pupilScale = approach(this.pupilScale, scale, 30, dt);
+    this.pupilAngle = approach(this.pupilAngle, angle, 30, dt);
   }
 
   private applyPupils(run: LayerRun) {
     const { cur, out } = run;
     const { x, y } = this.pupil;
     const s = this.pupilScale;
-    let cx = 0;
-    let cy = 0;
-    if (s !== 1) [cx, cy] = centroid(cur);
+    const a = this.pupilAngle;
+    if (s === 1 && a === 0) {
+      for (let i = 0; i < cur.length; i += 2) {
+        out[i] = cur[i] + x;
+        out[i + 1] = cur[i + 1] + y;
+      }
+      return;
+    }
+    const [cx, cy] = centroid(cur);
+    const cos = Math.cos(a);
+    const sin = Math.sin(a);
     for (let i = 0; i < cur.length; i += 2) {
-      out[i] = cx + (cur[i] - cx) * s + x;
-      out[i + 1] = cy + (cur[i + 1] - cy) * s + y;
+      const dx = (cur[i] - cx) * s;
+      const dy = (cur[i + 1] - cy) * s;
+      out[i] = cx + dx * cos - dy * sin + x;
+      out[i + 1] = cy + dx * sin + dy * cos + y;
     }
   }
 }
@@ -841,14 +870,20 @@ export default function MascotMoods({
 }: {
   frame?: "page" | "embedded";
 }) {
+  const engineRef = useRef<MascotEngine | null>(null);
   const [mood, setMood] = useState<Mood>("neutral");
   const [autoplay, setAutoplay] = useState(false);
+  const [loveVariant, setLoveVariant] = useState<LoveVariant>("beat");
+  const loveVariantRef = useRef<LoveVariant>("beat");
+  useEffect(() => {
+    loveVariantRef.current = loveVariant;
+    if (engineRef.current) engineRef.current.loveVariant = loveVariant;
+  }, [loveVariant]);
   const moodRef = useRef<Mood>("neutral");
   useEffect(() => {
     moodRef.current = mood;
   }, [mood]);
 
-  const engineRef = useRef<MascotEngine | null>(null);
   const pathEls = useRef(new Map<LayerName, SVGPathElement>());
   const reactionRef = useRef<SVGGElement>(null);
   const eyesRef = useRef<SVGGElement>(null);
@@ -864,6 +899,7 @@ export default function MascotMoods({
       moodRef.current,
       reducedRef.current,
     );
+    engine.loveVariant = loveVariantRef.current;
     engineRef.current = engine;
     return () => {
       engine.destroy();
@@ -905,7 +941,12 @@ export default function MascotMoods({
     const schedule = () => {
       timer = window.setTimeout(
         () => {
-          if (moodRef.current !== "sleep" && !reducedRef.current) {
+          const dreamy =
+            moodRef.current === "love" && loveVariantRef.current === "dreamy";
+          if (dreamy && !reducedRef.current) {
+            // Slow, heavy-lidded blinks.
+            restartAnimation(eyesRef.current, "mascot-blink-slow", 900);
+          } else if (moodRef.current !== "sleep" && !reducedRef.current) {
             restartAnimation(eyesRef.current, "mascot-blink", 170);
             // Occasional double blink reads as more alive than a metronome.
             if (Math.random() < 0.25) {
@@ -1110,6 +1151,34 @@ export default function MascotMoods({
             );
           })}
         </div>
+
+        {/* Love only: compare treatments for the hearts. */}
+        <div
+          role="group"
+          aria-label="Love treatment"
+          className={`flex items-center gap-1 text-xs transition-opacity duration-300 ${
+            mood === "love" ? "opacity-100" : "pointer-events-none opacity-0"
+          }`}
+          aria-hidden={mood !== "love"}
+        >
+          <span className="mr-1 text-stone-500">Hearts</span>
+          {LOVE_VARIANTS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              aria-pressed={loveVariant === v.id}
+              tabIndex={mood === "love" ? 0 : -1}
+              onClick={() => setLoveVariant(v.id)}
+              className={`mascot-chip h-7 rounded-full px-3 font-medium ${
+                loveVariant === v.id
+                  ? "bg-stone-900 text-white"
+                  : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
       </main>
     </div>
   );
@@ -1161,9 +1230,9 @@ const STYLES = `
 [data-mood="sad"]     .mascot-idle { animation: mascot-sniffle 4.8s ease-in-out infinite; transform: translateY(6px) rotate(-2deg) scale(0.985); }
 [data-mood="sleep"]   .mascot-idle { animation: mascot-bob 3.1s ease-in-out infinite; }
 [data-mood="worried"] .mascot-idle { animation: mascot-tremble 0.14s linear infinite; }
-[data-mood="curious"] .mascot-idle { animation: mascot-tilt 3.6s ease-in-out infinite; transform: rotate(-6deg) translateY(-2px); }
-[data-mood="love"]    .mascot-idle { animation: mascot-swoon 2.6s ease-in-out infinite; }
-[data-mood="ugh"]     .mascot-idle { animation: mascot-queasy 2.2s ease-in-out infinite; transform: rotate(4deg) translateX(8px) scale(0.985); }
+[data-mood="curious"] .mascot-idle { animation: mascot-breathe 3.8s ease-in-out infinite; transform: rotate(-4deg); }
+[data-mood="love"]    .mascot-idle { animation: mascot-breathe 3.2s ease-in-out infinite; }
+[data-mood="ugh"]     .mascot-idle { animation: mascot-breathe 3.6s ease-in-out infinite; transform: rotate(2deg) translateX(6px); }
 
 
 .mascot-zzz { opacity: 0; transition: opacity 500ms ease; }
@@ -1210,21 +1279,6 @@ const STYLES = `
   62%  { transform: scale(1.02, 1); opacity: 1; }
   100% { transform: scale(1, 1); opacity: 1; }
 }
-/* Curious: holds the tilt and leans in a little, like listening. */
-@keyframes mascot-tilt {
-  0%, 100% { transform: rotate(-6deg) translateY(-2px) scale(1, 1); }
-  50%      { transform: rotate(-7deg) translateY(-4px) scale(1.015, 1.02); }
-}
-/* Love: floats and sways, weightless. */
-@keyframes mascot-swoon {
-  0%, 100% { transform: rotate(-3deg) translateY(0); }
-  50%      { transform: rotate(3deg) translateY(-6px); }
-}
-/* Ugh: leaning away, with a slow queasy roll. */
-@keyframes mascot-queasy {
-  0%, 100% { transform: rotate(4deg) translateX(8px) scale(0.985, 0.985); }
-  50%      { transform: rotate(5deg) translateX(9px) scale(0.975, 0.995); }
-}
 @keyframes mascot-tremble {
   0%   { transform: translate(0, 0); }
   25%  { transform: translate(-0.7px, 0.25px); }
@@ -1261,12 +1315,10 @@ const STYLES = `
 }
 /* Entering love: a lift and a giddy wiggle. */
 @keyframes mascot-flutter {
-  0%   { transform: translateY(0) scale(1, 1) rotate(0); }
-  20%  { transform: translateY(-10px) scale(0.97, 1.05) rotate(-3deg); }
-  40%  { transform: translateY(-8px) scale(1, 1) rotate(3deg); }
-  60%  { transform: translateY(-4px) scale(1.02, 0.98) rotate(-2deg); }
-  80%  { transform: translateY(0) scale(1, 1) rotate(1deg); }
-  100% { transform: translateY(0) scale(1, 1) rotate(0); }
+  0%   { transform: translateY(0) scale(1, 1); }
+  30%  { transform: translateY(-8px) scale(0.98, 1.04); }
+  60%  { transform: translateY(0) scale(1.03, 0.97); }
+  100% { transform: translateY(0) scale(1, 1); }
 }
 /* Entering ugh: a jerk backwards and a squash. */
 @keyframes mascot-recoil {
@@ -1306,6 +1358,11 @@ const STYLES = `
 @keyframes mascot-blink {
   0%, 100% { transform: scaleY(1); }
   50%      { transform: scaleY(0.08); }
+}
+@keyframes mascot-blink-slow {
+  0%, 100% { transform: scaleY(1); }
+  35%      { transform: scaleY(0.12); }
+  55%      { transform: scaleY(0.12); }
 }
 @keyframes mascot-zzz {
   0%   { opacity: 0; transform: translate(0, 6px) scale(0.8); }
