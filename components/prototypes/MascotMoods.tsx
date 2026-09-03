@@ -1014,15 +1014,15 @@ export default function MascotMoods({
 
       <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
         <div>
-          <h1 className="text-base font-semibold tracking-tight text-neutral-900">
+          <h1 className="text-base font-semibold tracking-tight text-stone-900">
             Mascot moods
           </h1>
-          <p className="mt-0.5 text-sm text-neutral-500">
+          <p className="mt-0.5 text-sm text-stone-600">
             Nine states, one morphing SVG. Pick a mood or click the character.
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <p className="hidden items-center gap-1.5 text-xs text-neutral-500 md:flex">
+          <p className="hidden items-center gap-1.5 text-xs text-stone-600 md:flex">
             <kbd className="mascot-kbd">←</kbd>
             <kbd className="mascot-kbd">→</kbd>
             <span className="mr-2">switch</span>
@@ -1035,7 +1035,7 @@ export default function MascotMoods({
             type="button"
             onClick={() => setAutoplay((a) => !a)}
             aria-pressed={autoplay}
-            className="mascot-chip flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
+            className="mascot-chip flex h-9 items-center gap-2 rounded-full border border-stone-300 bg-white px-3.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
           >
             <span
               aria-hidden
@@ -1125,7 +1125,7 @@ export default function MascotMoods({
         <div
           role="group"
           aria-label="Mood"
-          className="grid w-full max-w-[420px] grid-cols-3 gap-1 rounded-2xl bg-stone-200/60 p-1 sm:flex sm:w-auto sm:max-w-none sm:rounded-full"
+          className="grid w-full max-w-[420px] grid-cols-3 gap-1 rounded-2xl bg-stone-200 p-1 sm:flex sm:w-auto sm:max-w-none sm:rounded-full"
         >
           {MOODS.map((m) => {
             const active = m === mood;
