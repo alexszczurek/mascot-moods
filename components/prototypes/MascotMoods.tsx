@@ -1040,7 +1040,7 @@ export default function MascotMoods({
             <span
               aria-hidden
               className={`size-1.5 rounded-full ${
-                autoplay ? "bg-emerald-500" : "bg-neutral-300"
+                autoplay ? "bg-emerald-500" : "bg-stone-300"
               }`}
             />
             {autoplay ? "Autoplay on" : "Autoplay"}
