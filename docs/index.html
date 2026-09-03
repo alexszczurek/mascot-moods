@@ -399,6 +399,8 @@ function layerFill(mood, spec) {
 // Ear tips are the points of the head's top segment that rise above this
 // line; the deformation weight grows with height so the base stays put.
 const EAR_BASE_Y = 60;
+// Resting size of the heart pupils, relative to the drawn shape.
+const HEART_REST = 0.8;
 class MascotEngine {
     constructor(els, initial, reduced) {
         this.reduced = reduced;
@@ -855,10 +857,11 @@ class MascotEngine {
         // the way a like button overshoots.
         let scale = 1;
         if (this.mood === "love") {
-            scale = 1 + 0.22 * this.beat(t);
+            // Hearts rest at 80% of the drawn size; the beat peaks near full size.
+            scale = HEART_REST * (1 + 0.22 * this.beat(t));
             const e = (t - this.moodT0) / 0.7;
             if (e > 0.25 && e < 1)
-                scale += 0.35 * Math.sin(Math.PI * ((e - 0.25) / 0.75));
+                scale += 0.3 * Math.sin(Math.PI * ((e - 0.25) / 0.75));
         }
         this.pupilScale = approach(this.pupilScale, scale, 40, dt);
     }
