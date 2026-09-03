@@ -1012,7 +1012,7 @@ export default function MascotMoods({
     >
       <style>{STYLES}</style>
 
-      <main className="relative flex flex-1 flex-col items-center justify-center gap-8 py-8">
+      <main className="relative flex flex-1 flex-col items-center justify-center gap-10 py-8 sm:gap-14">
         <div className="relative w-full max-w-[480px]">
           {/* Mood-coloured halo; only its colour changes, so it stays cheap. */}
           <div

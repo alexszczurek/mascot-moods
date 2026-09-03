@@ -1016,7 +1016,7 @@ function MascotMoods({ frame = "page", }) {
             ? "min-h-dvh px-6 py-6 sm:px-10 sm:py-8"
             : "mx-auto w-full max-w-[1040px] flex-1 px-6 py-4 md:px-8"}`, style: frame === "page" ? { backgroundColor: GROUND } : undefined, "data-mood": mood },
         React.createElement("style", null, STYLES),
-        React.createElement("main", { className: "relative flex flex-1 flex-col items-center justify-center gap-8 py-8" },
+        React.createElement("main", { className: "relative flex flex-1 flex-col items-center justify-center gap-10 py-8 sm:gap-14" },
             React.createElement("div", { className: "relative w-full max-w-[480px]" },
                 React.createElement("div", { "aria-hidden": true, className: "mascot-halo pointer-events-none absolute left-1/2 top-1/2 size-[420px] -translate-x-1/2 -translate-y-[46%] rounded-full blur-3xl", style: { backgroundColor: meta.tint } }),
                 React.createElement("button", { type: "button", onClick: () => step(1), "aria-label": `Mood: ${meta.label}. Next mood`, className: "mascot-figure relative block w-full cursor-pointer rounded-3xl" },
