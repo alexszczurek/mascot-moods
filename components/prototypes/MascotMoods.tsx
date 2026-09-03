@@ -35,7 +35,7 @@ const MOOD_META: Record<Mood, { label: string; tint: string }> = {
   sleep: { label: "Sleepy", tint: "#E2DDFA" },
 };
 
-const GROUND = "#FFFFFF";
+const GROUND = "#FFFCF6";
 
 // Every layer is sampled into a fixed number of points so any two states can
 // be interpolated. Layers whose silhouette shares fixed features across
